@@ -10,27 +10,32 @@ package tracker
 import "C"
 import (
 	"unsafe"
-
-	"github.com/fritzkeyzer/mac-time-tracker/internal/store"
 )
 
-func getWindows() ([]store.WindowInfo, error) {
+type WindowInfo struct {
+	AppName     string
+	RawAppName  string
+	WindowTitle string
+	IsActive    bool
+}
+
+func getWindows() ([]WindowInfo, error) {
 	// Call the C function to get window list
 	windowList := C.getWindowList()
 	defer C.freeWindowList(windowList)
 
 	if windowList.count == 0 {
-		return []store.WindowInfo{}, nil
+		return []WindowInfo{}, nil
 	}
 
 	// Convert C array to Go slice
-	windows := make([]store.WindowInfo, 0, int(windowList.count))
+	windows := make([]WindowInfo, 0, int(windowList.count))
 	cWindows := unsafe.Slice(windowList.windows, windowList.count)
 
 	for i := 0; i < int(windowList.count); i++ {
 		cWin := cWindows[i]
 
-		windows = append(windows, store.WindowInfo{
+		windows = append(windows, WindowInfo{
 			AppName:     C.GoString(cWin.appName),
 			RawAppName:  C.GoString(cWin.appName), // CoreGraphics gives us the display name
 			WindowTitle: C.GoString(cWin.windowTitle),

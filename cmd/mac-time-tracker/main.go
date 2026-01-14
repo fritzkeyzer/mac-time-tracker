@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"log/slog"
 	"os"
@@ -13,15 +14,18 @@ import (
 	"github.com/fritzkeyzer/mac-time-tracker/internal/logger"
 	"github.com/fritzkeyzer/mac-time-tracker/internal/store"
 	"github.com/fritzkeyzer/mac-time-tracker/internal/tracker"
+	"github.com/fritzkeyzer/mac-time-tracker/internal/web_ui"
 )
 
 const (
 	pollInterval   = 10 * time.Second
-	idleThreshold  = 5 * time.Minute
-	staleThreshold = 10 * pollInterval // 100 seconds
+	idleThreshold  = 2 * time.Minute
+	staleThreshold = 1 * time.Minute
 )
 
 func main() {
+	ctx := context.Background()
+
 	homeDir, err := os.UserHomeDir()
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Failed to get user home dir: %v\n", err)
@@ -37,25 +41,38 @@ func main() {
 		os.Exit(1)
 	}
 
-	// Init slog
-	logWriter := &logger.DailyLogWriter{Dir: logDir}
-	handler := slog.NewJSONHandler(logWriter, &slog.HandlerOptions{Level: slog.LevelDebug})
-	l := slog.New(handler)
-	slog.SetDefault(l)
-
 	// the default command is daemon
-	cmd := "daemon"
+	cmd := ""
 	if len(os.Args) >= 2 {
 		cmd = os.Args[1]
+	} else {
+		printUsage()
+		os.Exit(1)
 	}
+
+	// init slog
+	logWriter := &logger.DailyLogWriter{Dir: logDir}
+	handler := slog.NewJSONHandler(logWriter, &slog.HandlerOptions{Level: slog.LevelDebug})
+	l := slog.New(handler).With("cmd", cmd)
+	slog.SetDefault(l)
+
+	// init DB
+	db, dbCloseFn, err := store.InitDB(dbPath)
+	if err != nil {
+		slog.Error("Failed to init DB", "error", err)
+		os.Exit(1)
+	}
+	defer dbCloseFn()
 
 	switch cmd {
 	case "daemon":
-		runDaemon(dbPath)
+		runDaemon(ctx, db)
 	case "init":
 		runInit(logDir, workDir)
 	case "logs":
 		runLogs(logDir)
+	case "open":
+		runOpen(ctx, db)
 	case "uninstall":
 		runUninstall()
 	default:
@@ -71,19 +88,11 @@ func printUsage() {
 	fmt.Println("  daemon     Run the tracker daemon")
 	fmt.Println("  init       Install LaunchAgent")
 	fmt.Println("  logs       Tail logs")
+	fmt.Println("  open       Open web UI")
 	fmt.Println("  uninstall  Remove app bundle, plist, and optionally user data")
 }
 
-func runDaemon(dbPath string) {
-	db, err := store.InitDB(dbPath)
-	if err != nil {
-		slog.Error("Failed to init DB", "error", err)
-		os.Exit(1)
-	}
-	defer db.Close()
-
-	s := store.NewStore(db)
-
+func runDaemon(ctx context.Context, db *store.Queries) {
 	// Handle graceful shutdown
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
@@ -91,7 +100,7 @@ func runDaemon(dbPath string) {
 	slog.Info("Daemon started")
 
 	// Initial collection
-	if err := tracker.CollectAndLog(s, idleThreshold, staleThreshold); err != nil {
+	if err := tracker.CollectAndLog(ctx, db, pollInterval, idleThreshold, staleThreshold); err != nil {
 		slog.Error("Error collecting initial data", "error", err)
 	}
 
@@ -101,11 +110,11 @@ func runDaemon(dbPath string) {
 	for {
 		select {
 		case <-ticker.C:
-			if err := tracker.CollectAndLog(s, idleThreshold, staleThreshold); err != nil {
+			if err := tracker.CollectAndLog(ctx, db, pollInterval, idleThreshold, staleThreshold); err != nil {
 				slog.Error("Error collecting data", "error", err)
 			}
 		case <-sigChan:
-			slog.Info("Shutting down gracefully")
+			slog.Info("Shutting down")
 			return
 		}
 	}
@@ -123,6 +132,26 @@ func runLogs(logDir string) {
 		fmt.Fprintf(os.Stderr, "Error tailing logs: %v\n", err)
 		os.Exit(1)
 	}
+}
+
+func runOpen(ctx context.Context, db *store.Queries) {
+	// Handle graceful shutdown
+	sigChan := make(chan os.Signal, 1)
+	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
+
+	server := web_ui.NewServer(db, "8080")
+
+	// Start server in goroutine
+	go func() {
+		if err := server.Start(ctx); err != nil {
+			slog.Error("Server error", "error", err)
+			os.Exit(1)
+		}
+	}()
+
+	// Wait for shutdown signal
+	<-sigChan
+	slog.Info("Shutting down web server")
 }
 
 func runUninstall() {

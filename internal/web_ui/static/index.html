@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mac Time Tracker</title>
+    <!-- Performance: Preconnect to CDNs -->
+    <link rel="preconnect" href="https://unpkg.com" crossorigin>
+    <link rel="dns-prefetch" href="https://unpkg.com">
+    <link rel="preconnect" href="https://cdn.tailwindcss.com" crossorigin>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', '-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'Roboto', 'sans-serif'],
+                    },
+                    colors: {
+                        neutral: {
+                            850: '#1f1f1f',
+                            925: '#101010', // Deep dark for backgrounds
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        /* Custom Scrollbar for a minimal look */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #171717;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #404040;
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #525252;
+        }
+
+        /* Hide scrollbar for the timeline container but allow scroll */
+        .no-scrollbar::-webkit-scrollbar {
+            display: none;
+        }
+        .no-scrollbar {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+        }
+    </style>
+    <script type="importmap">
+    {
+        "imports": {
+            "vue": "https://unpkg.com/vue@3.4.15/dist/vue.esm-browser.js",
+            "vue-router": "https://unpkg.com/vue-router@4.2.5/dist/vue-router.esm-browser.js",
+            "@vue/devtools-api": "https://unpkg.com/@vue/devtools-api@6/lib/esm/index.js"
+        }
+    }
+    </script>
+</head>
+<body class="bg-neutral-950 text-neutral-300 font-sans h-screen w-screen overflow-hidden selection:bg-neutral-700 selection:text-white">
+<div id="app" class="h-full w-full">
+</div>
+<script type="module" src="./app.js"></script>
+</body>
+</html>

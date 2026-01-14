@@ -1,41 +1,55 @@
--- Application-level spans (coarse-grained tracking)
-CREATE TABLE app_spans
+-- non-overlapping, sequential spans of the currently focused window & app
+create table span
 (
-    id           INTEGER PRIMARY KEY AUTOINCREMENT,
-    app_name     TEXT    NOT NULL,
-    started_at   INTEGER NOT NULL,  -- Unix timestamp
-    last_seen_at INTEGER NOT NULL,
-    ended_at     INTEGER,
-    focus_count  INTEGER DEFAULT 0, -- How many times this app was focused
-    sample_count INTEGER DEFAULT 0  -- How many samples saw this app open
+    id           integer primary key autoincrement,
+    app_name     text    not null,
+    window_title text    not null,
+    start_at     integer not null, -- Unix timestamp
+    end_at       integer not null  -- Unix timestamp
 );
 
-CREATE INDEX idx_app_time ON app_spans (app_name, started_at, ended_at);
-CREATE INDEX idx_app_ended ON app_spans (ended_at);
+create index idx_start_at on span (start_at);
+create index idx_end_at on span (end_at);
 
 
--- Window-level spans (fine-grained tracking)
-CREATE TABLE window_spans
+create table category
 (
-    id           INTEGER PRIMARY KEY AUTOINCREMENT,
-    app_name     TEXT    NOT NULL,
-    window_title TEXT    NOT NULL,
-    started_at   INTEGER NOT NULL,
-    last_seen_at INTEGER NOT NULL,
-    ended_at     INTEGER,
-    focus_count  INTEGER DEFAULT 0,
-    sample_count INTEGER DEFAULT 0
+    id    integer primary key autoincrement,
+    name  text not null unique,
+    color text not null -- Tailwind class or hex
 );
 
-CREATE INDEX idx_window_time ON window_spans (app_name, started_at, ended_at);
-CREATE INDEX idx_window_ended ON window_spans (ended_at);
-
--- Idle spans: Track idle periods explicitly
-CREATE TABLE idle_periods
+create table project
 (
-    id         INTEGER PRIMARY KEY AUTOINCREMENT,
-    started_at INTEGER NOT NULL,
-    ended_at   INTEGER
+    id    integer primary key autoincrement,
+    name  text not null unique,
+    color text not null -- Tailwind class or hex
 );
 
-CREATE INDEX idx_idle_time on idle_periods (started_at, ended_at)
+-- Rules for mapping activity to projects
+create table project_rule
+(
+    id         integer primary key autoincrement,
+    pattern    text    not null, -- Regex pattern
+    project_id integer not null,
+    is_active  BOOLEAN not null default 1,
+    foreign key (project_id) references project (id) on delete cascade
+);
+
+-- Rules for mapping activity to categories
+create table category_rule
+(
+    id          integer primary key autoincrement,
+    pattern     text    not null, -- Regex pattern
+    category_id integer not null,
+    is_active   BOOLEAN not null default 1,
+    foreign key (category_id) references category (id) on delete cascade
+);
+
+-- Insert some default categories
+insert into category (name, color)
+values ('Development', 'bg-emerald-500'),
+       ('Communication', 'bg-blue-500'),
+       ('Browsing', 'bg-neutral-500'),
+       ('Design', 'bg-purple-500'),
+       ('Meeting', 'bg-yellow-500');
