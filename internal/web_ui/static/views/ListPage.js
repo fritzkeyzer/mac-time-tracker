@@ -100,27 +100,28 @@ export default {
             // Sort ascending (chronological)
             const sorted = [...store.spans.value].sort((a, b) => a.span.start_at - b.span.start_at);
             
-            let prevCatId = null;
-            let prevProjId = null;
+            let prevCatSig = null;
+            let prevProjSig = null;
 
             return sorted.map(item => {
                 const s = item.span;
-                const cat = item.categories && item.categories.length > 0 ? item.categories[0] : null;
-                const proj = item.projects && item.projects.length > 0 ? item.projects[0] : null;
+                const categories = item.categories || [];
+                const projects = item.projects || [];
 
-                const catId = cat ? cat.id : 'none';
-                const projId = proj ? proj.id : 'none';
+                // Create signature for comparison
+                const catSig = categories.map(c => c.id).join(',');
+                const projSig = projects.map(p => p.id).join(',');
 
-                const isNewCat = catId !== prevCatId;
-                const isNewProj = projId !== prevProjId;
+                const isNewCat = catSig !== prevCatSig;
+                const isNewProj = projSig !== prevProjSig;
 
-                prevCatId = catId;
-                prevProjId = projId;
+                prevCatSig = catSig;
+                prevProjSig = projSig;
 
                 return {
                     ...item,
-                    cat,
-                    proj,
+                    categories,
+                    projects,
                     isNewCat,
                     isNewProj
                 };
@@ -295,24 +296,36 @@ export default {
                                 <!-- Left Col: Meta Lines -->
                                 <div class="col-span-3 flex items-stretch pr-4 border-r border-neutral-800 relative">
                                     <!-- Category Track -->
-                                    <div 
-                                        class="w-1.5 mr-1 flex-shrink-0 rounded-sm opacity-80" 
-                                        :style="{ backgroundColor: item.cat ? item.cat.color : 'transparent' }"
-                                    ></div>
+                                    <div class="flex flex-shrink-0 mr-1">
+                                        <div v-if="!item.categories || item.categories.length === 0" class="w-1.5 rounded-sm bg-transparent"></div>
+                                        <div v-else v-for="cat in item.categories" :key="'trk-cat-'+cat.id" 
+                                            class="w-1.5 mr-0.5 last:mr-0 rounded-sm opacity-80" 
+                                            :style="{ backgroundColor: cat.color }"
+                                            :title="cat.name">
+                                        </div>
+                                    </div>
 
                                     <!-- Project Track -->
-                                    <div 
-                                        class="w-1.5 mr-3 flex-shrink-0 rounded-sm opacity-80"
-                                        :style="{ backgroundColor: item.proj ? item.proj.color : 'transparent' }"
-                                    ></div>
+                                    <div class="flex flex-shrink-0 mr-3">
+                                        <div v-if="!item.projects || item.projects.length === 0" class="w-1.5 rounded-sm bg-transparent"></div>
+                                        <div v-else v-for="proj in item.projects" :key="'trk-proj-'+proj.id"
+                                            class="w-1.5 mr-0.5 last:mr-0 rounded-sm opacity-80" 
+                                            :style="{ backgroundColor: proj.color }"
+                                            :title="proj.name">
+                                        </div>
+                                    </div>
 
                                     <!-- Context Labels -->
                                     <div class="flex flex-col justify-start pt-0.5 overflow-hidden min-w-0 w-full">
-                                        <div v-if="item.isNewCat && item.cat" class="text-[9px] font-bold uppercase tracking-wider text-neutral-400 mb-0.5 whitespace-nowrap overflow-hidden text-ellipsis" :title="item.cat.name">
-                                            {{ item.cat.name }}
+                                        <div v-if="item.isNewCat && item.categories.length > 0">
+                                            <div v-for="cat in item.categories" :key="'lbl-cat-'+cat.id" class="text-[9px] font-bold uppercase tracking-wider text-neutral-400 mb-0.5 whitespace-nowrap overflow-hidden text-ellipsis" :title="cat.name">
+                                                {{ cat.name }}
+                                            </div>
                                         </div>
-                                        <div v-if="item.isNewProj && item.proj" class="text-[9px] text-neutral-500 whitespace-nowrap overflow-hidden text-ellipsis" :title="item.proj.name">
-                                            {{ item.proj.name }}
+                                        <div v-if="item.isNewProj && item.projects.length > 0">
+                                            <div v-for="proj in item.projects" :key="'lbl-proj-'+proj.id" class="text-[9px] text-neutral-500 whitespace-nowrap overflow-hidden text-ellipsis" :title="proj.name">
+                                                {{ proj.name }}
+                                            </div>
                                         </div>
                                     </div>
                                 </div>
@@ -340,8 +353,8 @@ export default {
 
                                          <!-- Dots Container -->
                                          <div class="flex items-center gap-1">
-                                            <div v-if="item.cat" class="w-1.5 h-1.5 rounded-full opacity-80" :style="{ backgroundColor: item.cat.color }" :title="'Category: ' + item.cat.name"></div>
-                                            <div v-if="item.proj" class="w-1.5 h-1.5 rounded-full opacity-80" :style="{ backgroundColor: item.proj.color }" :title="'Project: ' + item.proj.name"></div>
+                                            <div v-for="cat in item.categories" :key="'dot-cat-'+cat.id" class="w-1.5 h-1.5 rounded-full opacity-80" :style="{ backgroundColor: cat.color }" :title="'Category: ' + cat.name"></div>
+                                            <div v-for="proj in item.projects" :key="'dot-proj-'+proj.id" class="w-1.5 h-1.5 rounded-full opacity-80" :style="{ backgroundColor: proj.color }" :title="'Project: ' + proj.name"></div>
                                          </div>
 
                                          <span class="text-[11px] text-neutral-500 truncate font-light ml-1">{{ item.span.window_title || 'Untitled' }}</span>
