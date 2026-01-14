@@ -100,7 +100,7 @@ func runDaemon(ctx context.Context, db *store.Queries) {
 	slog.Info("Daemon started")
 
 	// Initial collection
-	if err := tracker.CollectAndLog(ctx, db, pollInterval, idleThreshold, staleThreshold); err != nil {
+	if err := tracker.CollectAndLog(ctx, db, idleThreshold, staleThreshold); err != nil {
 		slog.Error("Error collecting initial data", "error", err)
 	}
 
@@ -110,7 +110,7 @@ func runDaemon(ctx context.Context, db *store.Queries) {
 	for {
 		select {
 		case <-ticker.C:
-			if err := tracker.CollectAndLog(ctx, db, pollInterval, idleThreshold, staleThreshold); err != nil {
+			if err := tracker.CollectAndLog(ctx, db, idleThreshold, staleThreshold); err != nil {
 				slog.Error("Error collecting data", "error", err)
 			}
 		case <-sigChan:

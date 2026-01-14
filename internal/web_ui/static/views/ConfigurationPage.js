@@ -1,4 +1,4 @@
-import { ref, onMounted, computed } from 'vue';
+import { onMounted, computed } from 'vue';
 import Navigation from "../components/Navigation.js";
 import ProjectEditor from "../components/ProjectEditor.js";
 import CategoryEditor from "../components/CategoryEditor.js";
@@ -14,8 +14,7 @@ export default {
     setup() {
         const projectsStore = useProjectsStore();
         const categoriesStore = useCategoriesStore();
-        const activeTab = ref('projects');
-
+        
         onMounted(async () => {
             await Promise.all([
                 projectsStore.fetchProjects(),
@@ -29,87 +28,12 @@ export default {
         const categoryRules = computed(() => categoriesStore.state.categoryRules);
         const isLoading = computed(() => projectsStore.state.isLoading || categoriesStore.state.isLoading);
 
-        // Project handlers
-        const handleSaveProject = async (project) => {
-            try {
-                await projectsStore.saveProject(project);
-            } catch (error) {
-                console.error('Failed to save project:', error);
-            }
-        };
-
-        const handleDeleteProject = async (id) => {
-            try {
-                await projectsStore.deleteProject(id);
-            } catch (error) {
-                console.error('Failed to delete project:', error);
-            }
-        };
-
-        const handleSaveProjectRule = async (rule) => {
-            try {
-                await projectsStore.saveProjectRule(rule);
-            } catch (error) {
-                console.error('Failed to save project rule:', error);
-            }
-        };
-
-        const handleDeleteProjectRule = async (id) => {
-            try {
-                await projectsStore.deleteProjectRule(id);
-            } catch (error) {
-                console.error('Failed to delete project rule:', error);
-            }
-        };
-
-        // Category handlers
-        const handleSaveCategory = async (category) => {
-            try {
-                await categoriesStore.saveCategory(category);
-            } catch (error) {
-                console.error('Failed to save category:', error);
-            }
-        };
-
-        const handleDeleteCategory = async (id) => {
-            try {
-                await categoriesStore.deleteCategory(id);
-            } catch (error) {
-                console.error('Failed to delete category:', error);
-            }
-        };
-
-        const handleSaveCategoryRule = async (rule) => {
-            try {
-                await categoriesStore.saveCategoryRule(rule);
-            } catch (error) {
-                console.error('Failed to save category rule:', error);
-            }
-        };
-
-        const handleDeleteCategoryRule = async (id) => {
-            try {
-                await categoriesStore.deleteCategoryRule(id);
-            } catch (error) {
-                console.error('Failed to delete category rule:', error);
-            }
-        };
-
         return {
-            activeTab,
             projects,
             projectRules,
             categories,
             categoryRules,
-            isLoading,
-            handleSaveProject,
-            handleDeleteProject,
-            handleSaveProjectRule,
-            handleDeleteProjectRule,
-            handleSaveCategory,
-            handleDeleteCategory,
-            handleSaveCategoryRule,
-            handleDeleteCategoryRule
+            isLoading
         };
     },
     template: `
@@ -126,30 +50,8 @@ export default {
             <!-- Main Content -->
             <main class="flex-1 flex flex-col relative overflow-hidden bg-neutral-950">
                 <!-- Header -->
-                <header class="h-16 border-b border-neutral-800 flex items-center justify-between px-8 bg-neutral-950/80 backdrop-blur z-10">
+                <header class="h-16 border-b border-neutral-800 flex items-center justify-between px-8 bg-neutral-950/80 backdrop-blur z-10 shrink-0">
                     <h2 class="font-medium text-neutral-200 text-lg">Configuration</h2>
-
-                    <!-- Tabs -->
-                    <div class="flex bg-neutral-900 rounded-lg p-1 border border-neutral-800">
-                        <button
-                            @click="activeTab = 'projects'"
-                            :class="[
-                                'px-5 py-2 text-sm font-medium rounded-md transition-all duration-200',
-                                activeTab === 'projects' ? 'bg-neutral-800 text-neutral-100 shadow-sm' : 'text-neutral-500 hover:text-neutral-300'
-                            ]"
-                        >
-                            Projects
-                        </button>
-                        <button
-                            @click="activeTab = 'categories'"
-                            :class="[
-                                'px-5 py-2 text-sm font-medium rounded-md transition-all duration-200',
-                                activeTab === 'categories' ? 'bg-neutral-800 text-neutral-100 shadow-sm' : 'text-neutral-500 hover:text-neutral-300'
-                            ]"
-                        >
-                            Categories
-                        </button>
-                    </div>
                 </header>
 
                 <!-- Loading State -->
@@ -159,30 +61,24 @@ export default {
 
                 <!-- Scrollable Content -->
                 <div v-else class="flex-1 overflow-y-auto custom-scrollbar p-8">
-                    <div class="max-w-6xl mx-auto">
+                    <div class="max-w-[1600px] mx-auto">
+                        <div class="grid grid-cols-1 xl:grid-cols-2 gap-8">
+                            <!-- Projects Column -->
+                            <div class="min-w-0">
+                                <ProjectEditor
+                                    :projects="projects"
+                                    :projectRules="projectRules"
+                                />
+                            </div>
 
-                        <!-- Projects Tab -->
-                        <ProjectEditor
-                            v-if="activeTab === 'projects'"
-                            :projects="projects"
-                            :projectRules="projectRules"
-                            @save-project="handleSaveProject"
-                            @delete-project="handleDeleteProject"
-                            @save-project-rule="handleSaveProjectRule"
-                            @delete-project-rule="handleDeleteProjectRule"
-                        />
-
-                        <!-- Categories Tab -->
-                        <CategoryEditor
-                            v-if="activeTab === 'categories'"
-                            :categories="categories"
-                            :categoryRules="categoryRules"
-                            @save-category="handleSaveCategory"
-                            @delete-category="handleDeleteCategory"
-                            @save-category-rule="handleSaveCategoryRule"
-                            @delete-category-rule="handleDeleteCategoryRule"
-                        />
-
+                            <!-- Categories Column -->
+                            <div class="min-w-0">
+                                <CategoryEditor
+                                    :categories="categories"
+                                    :categoryRules="categoryRules"
+                                />
+                            </div>
+                        </div>
                     </div>
                 </div>
             </main>

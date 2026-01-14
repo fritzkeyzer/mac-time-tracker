@@ -1,4 +1,4 @@
-import { ref, computed, watch, onMounted, onUnmounted } from 'vue';
+import { ref, computed, onMounted, onUnmounted } from 'vue';
 import Navigation from "../components/Navigation.js";
 import { useTimelineStore } from "../stores/useTimelineStore.js";
 
@@ -121,7 +121,7 @@ export default {
                     // Reset context grouping on new day for cleaner visuals
                     prevProjSig = null;
                 }
-                
+
                 const categories = item.categories || [];
                 const projects = item.projects || [];
 

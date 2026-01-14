@@ -16,7 +16,7 @@ var prevPowerState = false
 
 // CollectAndLog collects the current window state and logs it to the store.
 // This implements the polling logic as specified in logic.md
-func CollectAndLog(ctx context.Context, db *store.Queries, pollInterval, idleThreshold, staleThreshold time.Duration) error {
+func CollectAndLog(ctx context.Context, db *store.Queries, idleThreshold, staleThreshold time.Duration) error {
 	// idle check
 	idleSeconds, err := GetIdleTime()
 	if err != nil {
