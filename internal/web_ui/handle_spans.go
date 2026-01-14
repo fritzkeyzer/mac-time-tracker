@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"regexp"
 	"slices"
+	"sort"
 	"time"
 
 	"github.com/fritzkeyzer/mac-time-tracker/internal/store"
@@ -111,9 +112,9 @@ type GetOverviewRequest struct {
 }
 
 type AppOverview struct {
-	Name        string       `json:"name"`
-	Spans       []store.Span `json:"spans"`
-	TotalSeconds int64       `json:"total_seconds"`
+	Name         string       `json:"name"`
+	Spans        []store.Span `json:"spans"`
+	TotalSeconds int64        `json:"total_seconds"`
 }
 
 type ProjectOverview struct {
@@ -208,6 +209,16 @@ func (s *Server) handleGetOverview(ctx context.Context, in GetOverviewRequest) (
 	for _, cat := range categoryMap {
 		categories = append(categories, *cat)
 	}
+
+	sort.Slice(apps, func(i, j int) bool {
+		return apps[i].TotalSeconds > apps[j].TotalSeconds
+	})
+	sort.Slice(projects, func(i, j int) bool {
+		return projects[i].TotalSeconds > projects[j].TotalSeconds
+	})
+	sort.Slice(categories, func(i, j int) bool {
+		return categories[i].TotalSeconds > categories[j].TotalSeconds
+	})
 
 	return &GetOverviewResponse{
 		TotalSeconds: totalSeconds,

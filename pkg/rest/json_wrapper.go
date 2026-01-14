@@ -5,12 +5,9 @@ import (
 	"encoding/json"
 	"log/slog"
 	"net/http"
-	"os"
 
 	"github.com/gobigbang/binder"
 )
-
-var debug = os.Getenv("DEBUG") != ""
 
 // WrapJSONInOut wraps a regular Go function with HTTP request handling.
 func WrapJSONInOut[I, O any](fn func(ctx context.Context, in I) (*O, error)) http.HandlerFunc {

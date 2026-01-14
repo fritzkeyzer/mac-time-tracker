@@ -1,4 +1,4 @@
-import { ref, computed, watch, onMounted } from 'vue';
+import { ref, computed, watch, onMounted, onUnmounted } from 'vue';
 import Navigation from "../components/Navigation.js";
 import { useTimelineStore } from "../stores/useTimelineStore.js";
 
@@ -97,35 +97,52 @@ export default {
         const processedSpans = computed(() => {
             if (!store.spans.value) return [];
             
-            // Sort ascending (chronological)
-            const sorted = [...store.spans.value].sort((a, b) => a.span.start_at - b.span.start_at);
+            // Sort descending (newest first)
+            const sorted = [...store.spans.value].sort((a, b) => b.span.start_at - a.span.start_at);
             
-            let prevCatSig = null;
             let prevProjSig = null;
+            let lastDateStr = null;
+            const result = [];
 
-            return sorted.map(item => {
+            sorted.forEach(item => {
                 const s = item.span;
+                const d = new Date(s.start_at * 1000);
+                const dateStr = d.toDateString();
+
+                // Insert Date Header if date changes
+                if (dateStr !== lastDateStr && rangeType.value !== 'day') {
+                    result.push({
+                        type: 'date-header',
+                        id: 'dh-' + dateStr,
+                        label: d.toLocaleDateString([], { weekday: 'long', month: 'short', day: 'numeric' }),
+                        dateObj: d
+                    });
+                    lastDateStr = dateStr;
+                    // Reset context grouping on new day for cleaner visuals
+                    prevProjSig = null;
+                }
+                
                 const categories = item.categories || [];
                 const projects = item.projects || [];
 
                 // Create signature for comparison
-                const catSig = categories.map(c => c.id).join(',');
                 const projSig = projects.map(p => p.id).join(',');
 
-                const isNewCat = catSig !== prevCatSig;
                 const isNewProj = projSig !== prevProjSig;
 
-                prevCatSig = catSig;
                 prevProjSig = projSig;
 
-                return {
+                result.push({
                     ...item,
+                    type: 'entry',
+                    id: s.id, // Ensure top-level ID for keying
                     categories,
                     projects,
-                    isNewCat,
                     isNewProj
-                };
+                });
             });
+
+            return result;
         });
 
         const viewStats = computed(() => {
@@ -175,8 +192,43 @@ export default {
         };
 
         // Init
+        const refreshInterval = ref(null);
+
+        const startRefreshInterval = () => {
+            if (refreshInterval.value) return; // Already running
+            refreshInterval.value = setInterval(fetchDataForRange, 30_000);
+        };
+
+        const stopRefreshInterval = () => {
+            if (refreshInterval.value) {
+                clearInterval(refreshInterval.value);
+                refreshInterval.value = null;
+            }
+        };
+
+        const handleVisibilityChange = () => {
+            if (document.hidden) {
+                // Tab is hidden — stop polling
+                stopRefreshInterval();
+            } else {
+                // Tab is visible again — refresh immediately and restart interval
+                fetchDataForRange();
+                startRefreshInterval();
+            }
+        };
+
         onMounted(() => {
+            // Initial load
             fetchDataForRange();
+            startRefreshInterval();
+
+            // Listen for visibility changes
+            document.addEventListener('visibilitychange', handleVisibilityChange);
+        });
+
+        onUnmounted(() => {
+            stopRefreshInterval();
+            document.removeEventListener('visibilitychange', handleVisibilityChange);
         });
 
         return {
@@ -272,13 +324,8 @@ export default {
                 <!-- Scrollable List Area -->
                 <div class="flex-1 overflow-y-auto custom-scrollbar">
                     <div class="max-w-6xl mx-auto py-8">
-                        <!-- Table Header -->
-                        <div class="grid grid-cols-12 gap-0 border-b border-neutral-800 px-4 pb-2 py-3 text-[10px] uppercase tracking-wider text-neutral-500 font-semibold sticky top-0 bg-neutral-950 z-10">
-                            <div class="col-span-3 px-2">Context</div>
-                            <div class="col-span-9 px-2 pl-4">Activity Stream</div>
-                        </div>
                         <!-- Loading State -->
-                        <div v-if="isLoading" class="px-4 py-20 text-center text-neutral-500">Loading activity data...</div>
+                        <div v-if="isLoading && processedSpans.length === 0" class="px-4 py-20 text-center text-neutral-500">Loading activity data...</div>
 
                         <!-- Empty State -->
                         <div v-else-if="processedSpans.length === 0" class="px-4 py-20 text-center text-neutral-500">
@@ -287,81 +334,66 @@ export default {
 
                         <!-- Timeline Rows -->
                         <div v-else class="flex flex-col px-4">
-                            <div class="grid grid-cols-12 gap-0 group min-h-[1.75rem]">
-                                <div class="col-span-3 flex items-stretch pr-4 border-r border-neutral-800 relative"></div>
-                                <div class="col-span-9 pl-4 py-1 flex items-center gap-3 hover:bg-neutral-900/50 transition-colors rounded-r"></div>
-                            </div>
-                            <div v-for="item in processedSpans" :key="item.span.id" class="grid grid-cols-12 gap-0 group min-h-[1.75rem]">
+                            <template v-for="item in processedSpans" :key="item.id">
                                 
-                                <!-- Left Col: Meta Lines -->
-                                <div class="col-span-3 flex items-stretch pr-4 border-r border-neutral-800 relative">
-                                    <!-- Category Track -->
-                                    <div class="flex flex-shrink-0 mr-1">
-                                        <div v-if="!item.categories || item.categories.length === 0" class="w-1.5 rounded-sm bg-transparent"></div>
-                                        <div v-else v-for="cat in item.categories" :key="'trk-cat-'+cat.id" 
-                                            class="w-1.5 mr-0.5 last:mr-0 rounded-sm opacity-80" 
-                                            :style="{ backgroundColor: cat.color }"
-                                            :title="cat.name">
-                                        </div>
-                                    </div>
+                                <!-- Date Header Row -->
+                                <div v-if="item.type === 'date-header'" class="sticky top-0 z-10 bg-neutral-950/95 backdrop-blur border-b border-neutral-800 py-3 px-2 flex items-center">
+                                    <div class="w-2 h-2 rounded-full bg-neutral-700 mr-3"></div>
+                                    <span class="text-[10px] font-bold text-neutral-300 uppercase tracking-widest">{{ item.label }}</span>
+                                </div>
 
-                                    <!-- Project Track -->
-                                    <div class="flex flex-shrink-0 mr-3">
-                                        <div v-if="!item.projects || item.projects.length === 0" class="w-1.5 rounded-sm bg-transparent"></div>
-                                        <div v-else v-for="proj in item.projects" :key="'trk-proj-'+proj.id"
-                                            class="w-1.5 mr-0.5 last:mr-0 rounded-sm opacity-80" 
-                                            :style="{ backgroundColor: proj.color }"
-                                            :title="proj.name">
-                                        </div>
-                                    </div>
-
-                                    <!-- Context Labels -->
-                                    <div class="flex flex-col justify-start pt-0.5 overflow-hidden min-w-0 w-full">
-                                        <div v-if="item.isNewCat && item.categories.length > 0">
-                                            <div v-for="cat in item.categories" :key="'lbl-cat-'+cat.id" class="text-[9px] font-bold uppercase tracking-wider text-neutral-400 mb-0.5 whitespace-nowrap overflow-hidden text-ellipsis" :title="cat.name">
-                                                {{ cat.name }}
+                                <!-- Entry Row -->
+                                <div v-else class="grid grid-cols-12 gap-0 hover:bg-neutral-900/50 min-h-[1.75rem]">
+                                    
+                                    <!-- Left Col: Meta Lines -->
+                                    <div class="col-span-3 flex items-stretch relative gap-2">
+                                        <!-- Context Labels -->
+                                        <div class="flex flex-col justify-start overflow-hidden min-w-0 w-full">
+                                            <div v-if="item.isNewProj && item.projects.length > 0" class="flex flex-row justify-end items-center gap-2">
+                                                <div v-for="proj in item.projects" :key="'lbl-proj-'+proj.id" class="text-[9px] underline underline-offset-4 font-bold uppercase tracking-wider text-neutral-400 py-0.5 whitespace-nowrap overflow-hidden text-ellipsis text-end" :title="proj.name"
+                                                    :style="{ textDecorationColor: proj.color }"
+                                                >
+                                                    {{ proj.name }}
+                                                </div>
                                             </div>
                                         </div>
-                                        <div v-if="item.isNewProj && item.projects.length > 0">
-                                            <div v-for="proj in item.projects" :key="'lbl-proj-'+proj.id" class="text-[9px] text-neutral-500 whitespace-nowrap overflow-hidden text-ellipsis" :title="proj.name">
-                                                {{ proj.name }}
+                                        <!-- Project Track -->
+                                        <div class="flex flex-shrink-0 mr-3">
+                                            <div v-if="!item.projects || item.projects.length === 0" class="w-1.5 rounded-sm bg-transparent"></div>
+                                            <div v-else v-for="proj in item.projects" :key="'trk-proj-'+proj.id"
+                                                class="w-1.5 mr-0.5 last:mr-0 rounded-sm opacity-80" 
+                                                :style="{ backgroundColor: proj.color }"
+                                                :title="proj.name">
                                             </div>
                                         </div>
                                     </div>
-                                </div>
 
-                                <!-- Right Col: Content -->
-                                <div class="col-span-9 pl-4 py-1 flex items-center gap-3 hover:bg-neutral-900/50 transition-colors rounded-r">
-                                    <!-- Time -->
-                                    <div class="flex items-center gap-3">
-                                        <div class="text-[10px] font-mono text-neutral-600 w-12 flex-shrink-0 text-nowrap">
-                                            {{ formatTime(item.span.start_at) }}
+                                    <!-- Right Col: Content -->
+                                    <div class="col-span-9 pl-4 py-1 flex items-center gap-3 transition-colors rounded-r">
+                                        <!-- Time -->
+                                        <div class="flex items-center gap-3">
+                                            <div class="text-[10px] font-mono text-neutral-600 w-12 flex-shrink-0 text-nowrap">
+                                                {{ formatTime(item.span.start_at) }}
+                                            </div>
+                                            <div class="text-[10px] font-mono text-neutral-600 w-6 flex-shrink-0 text-nowrap">
+                                                {{ formatDuration(item.span.start_at, item.span.end_at) }}
+                                            </div>
                                         </div>
-                                        <div class="text-[10px] font-mono text-neutral-600 w-6 flex-shrink-0 text-nowrap">
-                                            {{ formatDuration(item.span.start_at, item.span.end_at) }}
+                                        
+
+                                        <!-- Details -->
+                                        <div class="min-w-0 flex-1 flex items-center gap-2 overflow-hidden">
+                                             <span class="text-xs font-medium text-neutral-300 whitespace-nowrap">{{ item.span.app_name }}</span>
+                                             <span class="text-[11px] text-neutral-500 truncate font-light ml-1">{{ item.span.window_title || 'Untitled' }}</span>
+                                        </div>
+                                        
+                                        <!-- Dots Container -->
+                                        <div class="flex items-center gap-1">
+                                            <div v-for="cat in item.categories" :key="'dot-cat-'+cat.id" class="w-2 h-2 rounded-full opacity-80" :style="{ backgroundColor: cat.color }" :title="'Category: ' + cat.name"></div>
                                         </div>
                                     </div>
-
-<!--                                    &lt;!&ndash; App Icon &ndash;&gt;-->
-<!--                                    <div class="w-5 h-5 rounded bg-neutral-800 flex items-center justify-center text-[9px] font-bold text-neutral-400 flex-shrink-0 border border-neutral-700/50">-->
-<!--                                        {{ getAppInitial(item.span.app_name) }}-->
-<!--                                    </div>-->
-
-                                    <!-- Details -->
-                                    <div class="min-w-0 flex-1 flex items-center gap-2 overflow-hidden">
-                                         <span class="text-xs font-medium text-neutral-300 whitespace-nowrap">{{ item.span.app_name }}</span>
-
-                                         <!-- Dots Container -->
-                                         <div class="flex items-center gap-1">
-                                            <div v-for="cat in item.categories" :key="'dot-cat-'+cat.id" class="w-1.5 h-1.5 rounded-full opacity-80" :style="{ backgroundColor: cat.color }" :title="'Category: ' + cat.name"></div>
-                                            <div v-for="proj in item.projects" :key="'dot-proj-'+proj.id" class="w-1.5 h-1.5 rounded-full opacity-80" :style="{ backgroundColor: proj.color }" :title="'Project: ' + proj.name"></div>
-                                         </div>
-
-                                         <span class="text-[11px] text-neutral-500 truncate font-light ml-1">{{ item.span.window_title || 'Untitled' }}</span>
-                                    </div>
                                 </div>
-
-                            </div>
+                            </template>
                         </div>
 
                     </div>
