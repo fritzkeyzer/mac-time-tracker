@@ -19,6 +19,10 @@ export default {
         getWindowGroupsForApp: {
             type: Function,
             required: true
+        },
+        groupColor: {
+            type: String,
+            default: null
         }
     },
     emits: ['selectActivity'],
@@ -39,13 +43,14 @@ export default {
             <div class="sticky left-0 z-30 w-48 pl-4 pr-2 bg-neutral-950/80 backdrop-blur border-r border-neutral-800 flex items-center gap-2 text-xs font-medium text-neutral-500 group-hover:text-neutral-300 transition-colors"
                 :class="showDetails ? 'h-12' : 'h-12'"
             >
-                <span class="w-2 h-2 rounded-full bg-neutral-700"></span> {{ app.name }}
+                <span class="w-2 h-2 rounded-full" :style="groupColor ? {backgroundColor: groupColor} : {}" :class="!groupColor ? 'bg-neutral-700' : ''"></span> {{ app.name }}
             </div>
 
             <!-- App Spans (multiple gray segments) -->
             <div v-for="(appSpan, spanIdx) in app.activities" :key="'app-span-'+spanIdx"
-                 class="absolute h-8 top-2 rounded-sm border border-opacity-50 text-[10px] text-neutral-300 px-2 flex items-center truncate cursor-pointer hover:text-white hover:z-40 hover:shadow-lg hover:border-neutral-400 transition-all select-none bg-neutral-700 border-neutral-600 z-10"
-                 :style="getActivityStyle(appSpan)"
+                 class="absolute h-8 top-2 rounded-sm border border-opacity-50 text-[10px] px-2 flex items-center truncate cursor-pointer hover:text-white hover:z-40 hover:shadow-lg transition-all select-none z-10"
+                 :class="!groupColor ? 'bg-neutral-700 border-neutral-600 text-neutral-300 hover:border-neutral-400' : 'text-white'"
+                 :style="Object.assign({}, getActivityStyle(appSpan), groupColor ? {backgroundColor: groupColor + 'CC', borderColor: groupColor} : {})"
                  @mouseenter="handleAppSpanClick(appSpan)"
             >
                 <span v-if="shouldShowActivityTitle(appSpan)">{{ app.name }}</span>

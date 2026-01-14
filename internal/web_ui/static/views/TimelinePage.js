@@ -19,6 +19,9 @@ export default {
         const rangeType = ref('day'); // 'day', 'week', 'month'
         const currentDate = ref(new Date());
 
+        // --- Grouping Mode Logic ---
+        const groupingMode = ref('apps'); // 'apps', 'categories', 'projects'
+
         const getRangeStart = (date, type) => {
             const d = new Date(date);
             d.setHours(0, 0, 0, 0);
@@ -116,25 +119,150 @@ export default {
             }
         });
 
-        // --- App rows with activities mapped from groupedSpans ---
-        const appsWithActivities = computed(() => {
+        // --- Helper function to calculate total time for a group ---
+        const calculateGroupTime = (group) => {
+            let totalSeconds = 0;
+            group.activities.forEach(span => {
+                totalSeconds += (span.end_at - span.start_at);
+            });
+            return totalSeconds;
+        };
+
+        // --- Grouping function ---
+        const getGroupedActivities = (mode) => {
             const grouped = store.groupedSpans.value || [];
-            console.log('Grouped spans:', grouped.length);
-            const result = grouped.map(group => {
-                const app = {
+
+            if (mode === 'apps') {
+                // Use existing groupedSpans from store (already grouped by app_name and filtered)
+                const groups = grouped.map(group => ({
                     id: group.appName,
                     name: group.appName,
                     activities: group.spans.map(ts => ts.span),
-                    fullSpans: group.spans
-                };
-                console.log(`App ${app.name}: ${app.activities.length} activities`);
-                if (app.activities.length > 0) {
-                    const firstActivity = app.activities[0];
-                    const style = store.getSpanStyle(firstActivity);
-                    console.log(`  First activity style:`, style);
-                }
-                return app;
-            });
+                    fullSpans: group.spans,
+                    color: null, // Will use span-specific colors
+                    isUncategorized: false
+                }));
+
+                // Calculate total time and sort by time (descending)
+                groups.forEach(g => g.totalTime = calculateGroupTime(g));
+                return groups.sort((a, b) => b.totalTime - a.totalTime);
+            }
+
+            if (mode === 'categories') {
+                const categoryMap = new Map();
+
+                // Add "Uncategorized" group
+                categoryMap.set('__uncategorized__', {
+                    id: '__uncategorized__',
+                    name: 'Uncategorized',
+                    activities: [],
+                    fullSpans: [],
+                    color: '#6B7280', // neutral gray
+                    isUncategorized: true
+                });
+
+                // Group by categories (spans can appear in multiple groups)
+                // Use filteredSpans to respect search
+                store.filteredSpans.value.forEach(timelineSpan => {
+                    if (!timelineSpan.categories || timelineSpan.categories.length === 0) {
+                        // Add to uncategorized
+                        const group = categoryMap.get('__uncategorized__');
+                        group.activities.push(timelineSpan.span);
+                        group.fullSpans.push(timelineSpan);
+                    } else {
+                        // Add to each category
+                        timelineSpan.categories.forEach(category => {
+                            const key = `cat-${category.id}`;
+                            if (!categoryMap.has(key)) {
+                                categoryMap.set(key, {
+                                    id: key,
+                                    name: category.name,
+                                    activities: [],
+                                    fullSpans: [],
+                                    color: category.color,
+                                    isUncategorized: false
+                                });
+                            }
+                            const group = categoryMap.get(key);
+                            group.activities.push(timelineSpan.span);
+                            group.fullSpans.push(timelineSpan);
+                        });
+                    }
+                });
+
+                const groups = Array.from(categoryMap.values());
+
+                // Calculate total time for each group
+                groups.forEach(g => g.totalTime = calculateGroupTime(g));
+
+                // Sort: uncategorized last, others by time descending
+                return groups.sort((a, b) => {
+                    if (a.isUncategorized) return 1;
+                    if (b.isUncategorized) return -1;
+                    return b.totalTime - a.totalTime;
+                });
+            }
+
+            if (mode === 'projects') {
+                const projectMap = new Map();
+
+                // Add "No Project" group
+                projectMap.set('__no_project__', {
+                    id: '__no_project__',
+                    name: 'No Project',
+                    activities: [],
+                    fullSpans: [],
+                    color: '#6B7280',
+                    isUncategorized: true
+                });
+
+                // Group by projects (spans can appear in multiple groups)
+                // Use filteredSpans to respect search
+                store.filteredSpans.value.forEach(timelineSpan => {
+                    if (!timelineSpan.projects || timelineSpan.projects.length === 0) {
+                        const group = projectMap.get('__no_project__');
+                        group.activities.push(timelineSpan.span);
+                        group.fullSpans.push(timelineSpan);
+                    } else {
+                        timelineSpan.projects.forEach(project => {
+                            const key = `proj-${project.id}`;
+                            if (!projectMap.has(key)) {
+                                projectMap.set(key, {
+                                    id: key,
+                                    name: project.name,
+                                    activities: [],
+                                    fullSpans: [],
+                                    color: project.color,
+                                    isUncategorized: false
+                                });
+                            }
+                            const group = projectMap.get(key);
+                            group.activities.push(timelineSpan.span);
+                            group.fullSpans.push(timelineSpan);
+                        });
+                    }
+                });
+
+                const groups = Array.from(projectMap.values());
+
+                // Calculate total time for each group
+                groups.forEach(g => g.totalTime = calculateGroupTime(g));
+
+                // Sort: no project last, others by time descending
+                return groups.sort((a, b) => {
+                    if (a.isUncategorized) return 1;
+                    if (b.isUncategorized) return -1;
+                    return b.totalTime - a.totalTime;
+                });
+            }
+
+            return [];
+        };
+
+        // --- Grouped activities (by apps, categories, or projects) ---
+        const groupedActivities = computed(() => {
+            const result = getGroupedActivities(groupingMode.value);
+            console.log(`Grouped by ${groupingMode.value}:`, result.length, 'groups');
             return result;
         });
 
@@ -178,7 +306,7 @@ export default {
             PIXELS_PER_HOUR: store.PIXELS_PER_HOUR,
             totalWidth: store.totalWidth,
             hours: store.hours,
-            appsWithActivities,
+            groupedActivities,
             selectedActivity: store.selectedSpan,
             detailsVisible: store.detailsVisible,
             showDetails: store.showDetails,
@@ -202,7 +330,9 @@ export default {
             goForward,
             goToToday,
             headerDate,
-            isToday
+            isToday,
+            // Grouping mode
+            groupingMode
         };
     },
     template: `
@@ -237,6 +367,22 @@ export default {
                                         @click="setRangeType('month')"
                                         :class="['px-3 py-1 text-[10px] font-medium rounded shadow-sm border transition-colors', rangeType === 'month' ? 'text-white bg-neutral-800 border-neutral-700/50' : 'text-neutral-500 border-transparent hover:text-neutral-300']"
                                     >Month</button>
+                                </div>
+
+                                <!-- Grouping Mode Switcher -->
+                                <div class="flex bg-neutral-900 rounded-md p-0.5 border border-neutral-800">
+                                    <button
+                                        @click="groupingMode = 'apps'"
+                                        :class="['px-3 py-1 text-[10px] font-medium rounded shadow-sm border transition-colors', groupingMode === 'apps' ? 'text-white bg-neutral-800 border-neutral-700/50' : 'text-neutral-500 border-transparent hover:text-neutral-300']"
+                                    >Apps</button>
+                                    <button
+                                        @click="groupingMode = 'categories'"
+                                        :class="['px-3 py-1 text-[10px] font-medium rounded shadow-sm border transition-colors', groupingMode === 'categories' ? 'text-white bg-neutral-800 border-neutral-700/50' : 'text-neutral-500 border-transparent hover:text-neutral-300']"
+                                    >Categories</button>
+                                    <button
+                                        @click="groupingMode = 'projects'"
+                                        :class="['px-3 py-1 text-[10px] font-medium rounded shadow-sm border transition-colors', groupingMode === 'projects' ? 'text-white bg-neutral-800 border-neutral-700/50' : 'text-neutral-500 border-transparent hover:text-neutral-300']"
+                                    >Projects</button>
                                 </div>
                             </div>
 
@@ -284,12 +430,12 @@ export default {
                 <!-- Timeline Wrapper -->
                 <div class="flex-1 overflow-auto relative custom-scrollbar" id="timeline-scroll-area">
                     <!-- Loading State -->
-                    <div v-if="isLoading && appsWithActivities.length === 0" class="absolute inset-0 flex items-center justify-center text-neutral-500">
+                    <div v-if="isLoading && groupedActivities.length === 0" class="absolute inset-0 flex items-center justify-center text-neutral-500">
                         Loading timeline data...
                     </div>
 
                     <!-- Empty State -->
-                    <div v-else-if="appsWithActivities.length === 0" class="absolute inset-0 flex items-center justify-center text-neutral-500">
+                    <div v-else-if="groupedActivities.length === 0" class="absolute inset-0 flex items-center justify-center text-neutral-500">
                         No activity recorded for this period.
                     </div>
 
@@ -307,13 +453,14 @@ export default {
                         <!-- App Rows -->
                         <div class="py-2 space-y-1 relative z-0 w-full">
                             <AppRow
-                                v-for="app in appsWithActivities"
+                                v-for="app in groupedActivities"
                                 :key="app.id"
                                 :app="app"
                                 :showDetails="showDetails"
                                 :getActivityStyle="getActivityStyle"
                                 :shouldShowActivityTitle="shouldShowActivityTitle"
                                 :getWindowGroupsForApp="getWindowGroupsForApp"
+                                :groupColor="app.color"
                                 @selectActivity="selectActivity"
                             />
                         </div>
