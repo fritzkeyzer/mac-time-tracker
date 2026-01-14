@@ -9,7 +9,7 @@ import (
 	"strings"
 )
 
-func getIdleTime() (float64, error) {
+func GetIdleTime() (float64, error) {
 	// ioreg returns nanoseconds since last input
 	out, err := exec.Command("ioreg", "-c", "IOHIDSystem").Output()
 	if err != nil {

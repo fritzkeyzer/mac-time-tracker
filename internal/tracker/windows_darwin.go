@@ -19,7 +19,7 @@ type WindowInfo struct {
 	IsActive    bool
 }
 
-func getWindows() ([]WindowInfo, error) {
+func GetWindows() ([]WindowInfo, error) {
 	// Call the C function to get window list
 	windowList := C.getWindowList()
 	defer C.freeWindowList(windowList)

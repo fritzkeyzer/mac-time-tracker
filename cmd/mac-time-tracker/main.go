@@ -19,8 +19,8 @@ import (
 
 const (
 	pollInterval   = 10 * time.Second
-	idleThreshold  = 2 * time.Minute
-	staleThreshold = 1 * time.Minute
+	idleThreshold  = 5 * time.Minute
+	staleThreshold = 10 * time.Minute
 )
 
 func main() {

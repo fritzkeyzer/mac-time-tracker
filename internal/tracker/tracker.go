@@ -11,23 +11,45 @@ import (
 	"github.com/fritzkeyzer/mac-time-tracker/internal/store"
 )
 
+var prevIdleState = false
+var prevPowerState = false
+
 // CollectAndLog collects the current window state and logs it to the store.
 // This implements the polling logic as specified in logic.md
 func CollectAndLog(ctx context.Context, db *store.Queries, pollInterval, idleThreshold, staleThreshold time.Duration) error {
 	// idle check
-	idleSeconds, err := getIdleTime()
+	idleSeconds, err := GetIdleTime()
 	if err != nil {
 		return fmt.Errorf("idle time error: %w", err)
 	}
-	if idleSeconds > idleThreshold.Seconds() {
-		if idleSeconds-pollInterval.Seconds() < idleThreshold.Seconds() {
-			slog.Debug("Idle", "threshold", idleThreshold, "pollInterval", pollInterval, "idleSeconds", idleSeconds)
-		}
+	isIdle := idleSeconds > idleThreshold.Seconds()
+
+	// Check if we should consider the user idle
+	hasPowerAssertions, err := HasActivePowerAssertions()
+	if err != nil {
+		slog.Warn("Failed to check power assertions", "error", err)
+	}
+
+	defer func() {
+		prevIdleState = isIdle
+		prevPowerState = hasPowerAssertions
+	}()
+
+	if isIdle != prevIdleState || hasPowerAssertions != prevPowerState {
+		slog.Debug("Idle changed",
+			"isIdle", isIdle,
+			"threshold", idleThreshold.Seconds(),
+			"idleSeconds", idleSeconds,
+			"hasPowerAssertions", hasPowerAssertions,
+		)
+	}
+
+	if isIdle && !hasPowerAssertions {
 		return nil
 	}
 
 	// get open windows
-	windows, err := getWindows()
+	windows, err := GetWindows()
 	if err != nil {
 		return fmt.Errorf("window list error: %w", err)
 	}
@@ -79,6 +101,8 @@ func saveFocused(ctx context.Context, db *store.Queries, activeApp, activeWindow
 		if err != nil {
 			return fmt.Errorf("update span: %w", err)
 		}
+
+		slog.Debug("Updated span", "app", activeApp, "window", activeWindow)
 
 		return nil
 	}
